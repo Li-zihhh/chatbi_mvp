@@ -8,10 +8,11 @@
 | `query_parser.py` | 用户输入校验 | `parse_query(question) → str` |
 | `prompt_builder.py` | Prompt 组装（Schema + Rules + Few-shot + 指标知识） | `build_prompt(question, ...) → (system_msg, prompt)` |
 | `llm_client.py` | LLM API 调用（同步文本/SQL、流式、Embedding） | `generate_text()`、`generate_sql()`、`generate_sql_stream()`、`get_embedding()` |
-| `database.py` | MySQL 连接与 SQL 执行 | `execute_sql(sql) → results` |
+| `security.py` | 权限与安全规则模块，统一处理危险 SQL 拦截、行级过滤、列级脱敏 | `QuerySecurityManager.secure_sql()`、`mask_result()`、`UserContext` |
+| `database.py` | MySQL 连接与 SQL 执行，并在执行前后接入安全规则 | `execute(sql, user=None) → (columns, rows)` |
 | `result_formatter.py` | 结果格式化为表格/文本 | `format_result(results) → str` |
-| `main.py` | 系统主入口（CLI + ChatBISystem 类） | `ChatBISystem.run(question)`、`.run_stream(question)`、内部统一走 `_resolve_indicator_context()` |
-| `api_service.py` | FastAPI 服务（同步 + SSE 流式接口） | `POST /api/v1/query`、`POST /api/v1/query/stream`，支持 `use_schema_linking` / `use_indicator_rag` 开关 |
+| `main.py` | 系统主入口（CLI + ChatBISystem 类） | `ChatBISystem.run(question, security_context=...)`、`.run_stream(question, security_context=...)`、内部统一走 `_resolve_indicator_context()` |
+| `api_service.py` | FastAPI 服务（同步 + SSE 流式接口），通过中间件挂载用户上下文 | `POST /api/v1/query`、`POST /api/v1/query/stream`，支持 `use_schema_linking` / `use_indicator_rag` 和 `x-user-role` / `x-user-region` |
 | `schema_generator.py` | 从数据库 information_schema 自动提取表结构 | `generate_schema() → str` |
 
 ### Agent 预备模块（第 22 课）
@@ -30,6 +31,7 @@
 | `tests/test_report_generator.py` | 验证报告解析与模板回退逻辑 | `uv run pytest tests/test_report_generator.py` |
 | `tests/test_query_decomposer.py` | 验证 Schema / 指标注入、维度合法性校验，以及复杂度超标后的自动重试 | `uv run pytest tests/test_query_decomposer.py` |
 | `tests/test_prompt_and_config.py` | 验证“最近 N 个月”仍按 `CURDATE()` 规则处理，以及长 SQL 输出 token 上限 | `uv run pytest tests/test_prompt_and_config.py` |
+| `tests/test_security.py` | 验证危险 SQL 拦截、区域过滤、结果脱敏，以及主链路把权限失败归类为 `security` | `uv run pytest tests/test_security.py -q` |
 
 ### 错误分析与评估模块（第 7-8 课）
 
