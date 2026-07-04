@@ -4,12 +4,12 @@
 
 | 模块 | 用途 | 关键接口 |
 |------|------|---------|
-| `config.py` | 集中管理数据库和 LLM API 配置 | `DB_CONFIG`、`LLM_CONFIG` |
+| `config.py` | 集中管理数据库和 LLM API 配置，并维护执行层超时/连接池/慢查询阈值 | `DB_CONFIG`、`DB_RUNTIME_CONFIG`、`LLM_CONFIG` |
 | `query_parser.py` | 用户输入校验 | `parse_query(question) → str` |
 | `prompt_builder.py` | Prompt 组装（Schema + Rules + Few-shot + 指标知识） | `build_prompt(question, ...) → (system_msg, prompt)` |
 | `llm_client.py` | LLM API 调用（同步文本/SQL、流式、Embedding） | `generate_text()`、`generate_sql()`、`generate_sql_stream()`、`get_embedding()` |
 | `security.py` | 权限与安全规则模块，统一处理危险 SQL 拦截、行级过滤、列级脱敏 | `QuerySecurityManager.secure_sql()`、`mask_result()`、`UserContext` |
-| `database.py` | MySQL 连接与 SQL 执行，并在执行前后接入安全规则 | `execute(sql, user=None) → (columns, rows)` |
+| `database.py` | MySQL 连接与 SQL 执行，并在执行前后接入安全规则、异常分型、慢查询 `EXPLAIN` 和轻量连接池 | `execute(sql, user=None) → (columns, rows)`、`DatabaseConnectionPool.acquire()`、`QueryExecutionError`、`last_query_info` |
 | `result_formatter.py` | 结果格式化为表格/文本 | `format_result(results) → str` |
 | `main.py` | 系统主入口（CLI + ChatBISystem 类） | `ChatBISystem.run(question, security_context=...)`、`.run_stream(question, security_context=...)`、内部统一走 `_resolve_indicator_context()` |
 | `api_service.py` | FastAPI 服务（同步 + SSE 流式接口），通过中间件挂载用户上下文 | `POST /api/v1/query`、`POST /api/v1/query/stream`，支持 `use_schema_linking` / `use_indicator_rag` 和 `x-user-role` / `x-user-region` |
@@ -32,6 +32,7 @@
 | `tests/test_query_decomposer.py` | 验证 Schema / 指标注入、维度合法性校验，以及复杂度超标后的自动重试 | `uv run pytest tests/test_query_decomposer.py` |
 | `tests/test_prompt_and_config.py` | 验证“最近 N 个月”仍按 `CURDATE()` 规则处理，以及长 SQL 输出 token 上限 | `uv run pytest tests/test_prompt_and_config.py` |
 | `tests/test_security.py` | 验证危险 SQL 拦截、区域过滤、结果脱敏，以及主链路把权限失败归类为 `security` | `uv run pytest tests/test_security.py -q` |
+| `tests/test_database_runtime.py` | 验证数据库异常分型、慢查询 `EXPLAIN` 记录、连接池复用，以及主链路返回细粒度数据库错误类型 | `uv run pytest tests/test_database_runtime.py -q` |
 
 ### 错误分析与评估模块（第 7-8 课）
 
@@ -161,6 +162,7 @@ uv run <脚本名>.py
 cd code/chatbi_mvp
 uv run pytest -q
 uv run python agent_planner.py "分析近半年的利润变化情况"
+uv run pytest tests/test_database_runtime.py -q
 ```
 
 ### Git 提交规范
